@@ -129,10 +129,10 @@ const ROUTE_DB: Record<string, RouteInfo> = {
   },
   "nairobi kampala": {
     waypoints: [
-      "Nairobi", "Nakuru", "Eldoret", "Malaba", "Tororo",
+      "Nairobi", "Nakuru", "Eldoret", "Webuye", "Malaba", "Tororo",
       "Jinja", "Kampala",
     ],
-    terrainProfile: ["hilly", "rolling", "flat", "flat", "flat", "flat"],
+    terrainProfile: ["hilly", "rolling", "rolling", "flat", "flat", "flat", "flat"],
     region: "east-africa",
   },
   "kampala kigali": {
@@ -685,6 +685,8 @@ const SEGMENT_TERRAIN_OVERRIDES: Record<string, string> = {
   "gilgil|nakuru":              "Easy rolling plains toward Lake Nakuru; watch for baboons and flamingo flocks on the lakeshore.",
   "nakuru|eldoret":             "Long sweeping climb back out of the Rift Valley followed by fertile highland farming country.",
   "eldoret|malaba":             "Descending road through Uasin Gishu plateau farmland toward the Uganda border — a fast, rewarding day.",
+  "eldoret|webuye":             "Gentle descent off the Uasin Gishu plateau through maize country toward the Nzoia river basin.",
+  "webuye|malaba":              "Flat sugar-cane corridor through Bungoma county to the busy Malaba border crossing.",
   "malaba|tororo":              "Uganda border crossing into flat sugar cane and maize country; road quality improves markedly.",
   // Uganda
   "tororo|jinja":               "Flat Lake Victoria basin road through banana and sugar plantations; the Nile crossing at Jinja is unmissable.",
