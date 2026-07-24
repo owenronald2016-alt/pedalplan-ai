@@ -1,3 +1,5 @@
+import { lookupCoords, type LatLng } from "@/lib/coordinates";
+
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 export type PlannerFormValues = {
@@ -172,6 +174,100 @@ const ROUTE_DB: Record<string, RouteInfo> = {
       "Katuna", "Kigali",
     ],
     terrainProfile: ["flat", "flat", "rolling", "rolling", "hilly", "rolling"],
+    region: "east-africa",
+  },
+  "nairobi malindi": {
+    waypoints: [
+      "Nairobi", "Athi River", "Sultan Hamud", "Emali", "Mtito Andei",
+      "Voi", "Mariakani", "Mombasa", "Kilifi", "Malindi",
+    ],
+    terrainProfile: ["flat", "rolling", "flat", "flat", "rolling", "flat", "flat", "flat", "flat"],
+    region: "east-africa",
+    coastal: true,
+  },
+  "nairobi nanyuki": {
+    waypoints: [
+      "Nairobi", "Thika", "Muranga", "Nyeri", "Naro Moru", "Nanyuki",
+    ],
+    terrainProfile: ["rolling", "rolling", "hilly", "hilly", "rolling"],
+    region: "east-africa",
+  },
+  "nairobi maasai mara": {
+    waypoints: [
+      "Nairobi", "Narok", "Sekenani Gate", "Maasai Mara",
+    ],
+    terrainProfile: ["hilly", "rolling", "rolling"],
+    region: "east-africa",
+  },
+  "kisumu kitale": {
+    waypoints: [
+      "Kisumu", "Kakamega", "Webuye", "Bungoma", "Kitale",
+    ],
+    terrainProfile: ["rolling", "rolling", "flat", "rolling"],
+    region: "east-africa",
+  },
+  "arusha serengeti": {
+    waypoints: [
+      "Arusha", "Mto wa Mbu", "Karatu", "Ngorongoro Crater", "Seronera", "Serengeti",
+    ],
+    terrainProfile: ["rolling", "hilly", "mountainous", "rolling", "flat"],
+    region: "east-africa",
+  },
+  "dar es salaam bagamoyo": {
+    waypoints: [
+      "Dar es Salaam", "Kibaha", "Bagamoyo",
+    ],
+    terrainProfile: ["rolling", "flat"],
+    region: "east-africa",
+    coastal: true,
+  },
+  "mbeya karonga": {
+    waypoints: [
+      "Mbeya", "Kyela", "Karonga",
+    ],
+    terrainProfile: ["mountainous", "rolling"],
+    region: "east-africa",
+  },
+  "kampala fort portal": {
+    waypoints: [
+      "Kampala", "Mubende", "Fort Portal", "Kasese",
+    ],
+    terrainProfile: ["rolling", "rolling", "hilly"],
+    region: "east-africa",
+  },
+  "kampala murchison falls": {
+    waypoints: [
+      "Kampala", "Masindi", "Murchison Falls",
+    ],
+    terrainProfile: ["rolling", "rolling"],
+    region: "east-africa",
+  },
+  "jinja sipi falls": {
+    waypoints: [
+      "Jinja", "Mbale", "Kapchorwa", "Sipi Falls",
+    ],
+    terrainProfile: ["flat", "rolling", "hilly"],
+    region: "east-africa",
+  },
+  "kigali bujumbura": {
+    waypoints: [
+      "Kigali", "Muhanga", "Huye", "Bujumbura",
+    ],
+    terrainProfile: ["hilly", "hilly", "mountainous"],
+    region: "east-africa",
+  },
+  "addis ababa hawassa": {
+    waypoints: [
+      "Addis Ababa", "Debre Zeit", "Mojo", "Ziway", "Shashamane", "Hawassa",
+    ],
+    terrainProfile: ["rolling", "flat", "flat", "flat", "flat"],
+    region: "east-africa",
+  },
+  "kisumu kampala": {
+    waypoints: [
+      "Kisumu", "Busia", "Tororo", "Jinja", "Kampala",
+    ],
+    terrainProfile: ["rolling", "flat", "flat", "flat"],
     region: "east-africa",
   },
 
@@ -365,6 +461,35 @@ function genericWaypointPool(region: Region) {
   if (region === "europe") return GENERIC_WAYPOINTS_EU;
   return GENERIC_WAYPOINTS_GEN;
 }
+
+// ─── Real-world distance ──────────────────────────────────────────────────────
+
+/** Great-circle (straight-line) distance in km between two [lat, lng] points. */
+function haversineKm([lat1, lng1]: LatLng, [lat2, lng2]: LatLng): number {
+  const R = 6371; // Earth radius, km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Roads are never a straight line — they bend around hills, rivers, and
+ * towns. This multiplies the haversine distance to approximate real road
+ * distance, scaled by how mountainous the segment is (more terrain =
+ * more switchbacks and detours relative to straight-line distance).
+ */
+const ROAD_DETOUR_FACTOR: Record<TerrainType, number> = {
+  flat: 1.15,
+  rolling: 1.22,
+  hilly: 1.32,
+  mountainous: 1.48,
+};
 
 // ─── Elevation by terrain ─────────────────────────────────────────────────────
 
@@ -582,6 +707,61 @@ const SEGMENT_TERRAIN_OVERRIDES: Record<string, string> = {
   "arusha|moshi":               "Classic Kilimanjaro approach road — Kili's snowcap dominates the horizon on clear mornings. Coffee and banana country.",
   "moshi|same":                 "Descending road through the Pare Hills foothills — increasingly dry and warm as you leave Kili's shadow.",
   "dar es salaam|zanzibar":     "Short ferry crossing from the Dar es Salaam terminal to Zanzibar Town (45–90 min) — bikes travel as cargo.",
+  // Kenya coast (Nairobi–Malindi)
+  "voi|mariakani":              "Long dry-country stretch from Tsavo into the coastal hinterland — sisal plantations appear as the humidity rises.",
+  "mombasa|kilifi":             "Coastal road north of Mombasa via the Nyali/Mtwapa creek crossings — busy but well-tarmacked, with sea breezes.",
+  "kilifi|malindi":             "Palm-lined coastal highway hugging the Indian Ocean — coral-rag scenery and frequent fresh coconut stops.",
+  // Kenya highlands (Mt Kenya)
+  "nairobi|thika":              "Wide dual-carriageway out of Nairobi through coffee estates — busy but shouldered; settles into farmland past Thika.",
+  "thika|muranga":              "Rolling tea and coffee country on the lower slopes of the Aberdares — small market towns every few kilometres.",
+  "muranga|nyeri":              "Steady climb toward Nyeri with Mt Kenya's snowcap appearing on clear mornings — classic Central Highlands riding.",
+  "nyeri|naro moru":            "Highland approach road directly beneath Mt Kenya — cool air, dairy farms, and the mountain filling the skyline.",
+  "naro moru|nanyuki":          "Final rolling stretch to Nanyuki on the equator — wheat fields give way to views of Mt Kenya's glaciers.",
+  // Kenya — Maasai Mara
+  "nairobi|narok":              "Climb over the Ngong Hills escarpment before descending onto the Loita Plains — a dramatic Rift Valley opener.",
+  "narok|sekenani gate":        "Open grassland road toward the Mara — expect murram surfaces and the first wildlife sightings near the reserve boundary.",
+  "sekenani gate|maasai mara":  "Riding within sight of the Mara's rolling savanna — guided/escorted riding recommended due to wildlife presence.",
+  // Kenya — western loop
+  "kisumu|kakamega":            "Lake Victoria basin road climbing gently into Kakamega's sugar-cane and tea country.",
+  "kakamega|webuye":            "Rolling highland tarmac past the edge of Kakamega Forest — Kenya's last remnant of tropical rainforest.",
+  "webuye|bungoma":             "Short, flat farmland link road through Bukusu homesteads and maize fields.",
+  "bungoma|kitale":             "Fertile Mt Elgon foothill country — rolling terrain with the mountain visible to the north on clear days.",
+  // Tanzania — Serengeti/Ngorongoro
+  "arusha|mto wa mbu":          "Descend off the Arusha plateau into the Rift Valley floor — baobabs and Lake Manyara's escarpment to the south.",
+  "mto wa mbu|karatu":          "Steady climb up the Rift wall onto the Ngorongoro highlands — coffee shambas and cooler air with every kilometre.",
+  "karatu|ngorongoro crater":   "Sustained highland climb to the crater rim — expect mist, Maasai bomas, and one of Africa's great panoramas at the top.",
+  "ngorongoro crater|seronera": "Descent from the crater highlands onto the Serengeti plains — open grassland riding within a controlled safari corridor.",
+  "seronera|serengeti":         "Endless Serengeti plains — flat, exposed, and best ridden as part of an escorted safari-cycling itinerary.",
+  // Tanzania — coast
+  "dar es salaam|kibaha":       "Busy highway climbing out of Dar's northern suburbs — heavy truck traffic thins past the Kibaha junction.",
+  "kibaha|bagamoyo":            "Quiet coastal road to the historic slave-trade port of Bagamoyo — flat riding through coconut groves and fishing villages.",
+  // Tanzania — Malawi border
+  "mbeya|kyela":                "Dramatic descent from the Mbeya highlands to the humid lakeshore lowlands near Lake Nyasa.",
+  "kyela|karonga":              "Short flat stretch to the Malawi border crossing at Songwe — straightforward for cyclists with onward tarmac into Karonga.",
+  // Uganda — Rwenzori
+  "kampala|mubende":            "Rolling western highway through banana plantations and cattle corridors — a long transit day toward the Rwenzoris.",
+  "mubende|fort portal":        "Undulating tea-country road with the Rwenzori 'Mountains of the Moon' rising on the horizon in clear weather.",
+  "fort portal|kasese":         "Ride beneath the snow-capped Rwenzori range through tea estates — one of Uganda's most scenic cycling corridors.",
+  // Uganda — Murchison Falls
+  "kampala|masindi":            "Long rolling highway north through Lake Kyoga's farmland basin — a full transit day toward Murchison Falls.",
+  "masindi|murchison falls":    "Savanna park-approach road with elephant and buffalo crossings possible — ride only with a ranger escort inside the park.",
+  // Uganda — Sipi Falls
+  "jinja|mbale":                "Flat sugar-cane and rice-paddy corridor along the Mt Elgon foothills, with the mountain building on the horizon.",
+  "mbale|kapchorwa":            "Steady climb into the Mt Elgon foothills — coffee shambas give way to cooler, misty highland air.",
+  "kapchorwa|sipi falls":       "Short, steep final climb to the Sipi Falls escarpment — arabica coffee farms frame the three-tier waterfall.",
+  // Rwanda–Burundi
+  "kigali|muhanga":             "Immaculate rolling tarmac through Rwanda's 'thousand hills' — terraced hillsides in every direction.",
+  "muhanga|huye":               "Continued highland riding through tea estates toward Rwanda's southern university town of Huye.",
+  "huye|bujumbura":             "Sustained mountainous descent from the Rwandan highlands to Lake Tanganyika's shore at Bujumbura.",
+  // Ethiopia
+  "addis ababa|debre zeit":     "Rolling highland exit from Addis onto the edge of the Rift Valley — crater lakes visible near Debre Zeit.",
+  "debre zeit|mojo":            "Flat Rift Valley floor riding past acacia woodland and small market towns.",
+  "mojo|ziway":                 "Open Rift Valley corridor with lake views near Ziway — flat, fast, and increasingly warm.",
+  "ziway|shashamane":           "Flat highway riding through Oromia farmland with occasional lakeside glimpses.",
+  "shashamane|hawassa":         "Short final stretch to Lake Hawassa — flat road through flower farms and fish-market villages.",
+  // Kenya–Uganda border crossing
+  "kisumu|busia":               "Flat Lake Victoria basin road west from Kisumu through sugar-cane country to the Busia border post.",
+  "busia|tororo":               "Busy border-town crossing into Uganda — expect congestion at the post itself, then quiet flat roads beyond.",
   // Europe
   "vienna|baden":               "Well-signed cycle route south from Vienna through suburban vineyards and the Vienna Woods.",
   "baden|wiener neustadt":      "Gently rolling road through Lower Austrian farmland with distant Alpine foothills on the horizon.",
@@ -1012,15 +1192,27 @@ export function generateItinerary(trip: PlannerFormValues): Itinerary {
     const isFirst = i === 0;
     const isLast = i === trip.duration - 1;
 
-    // Distance variation: first & last days are slightly shorter
-    const factor = isFirst || isLast ? 0.75 : 0.85 + Math.abs(Math.sin(i * 7.3)) * 0.30;
-    const dist = Math.round(dailyDist * factor);
-
-    // Terrain
+    // Terrain (computed first — distance's road-detour correction depends on it)
     const terrain: TerrainType =
       terrainProfile.length > 0
         ? terrainProfile[i % terrainProfile.length]
         : (["flat", "rolling", "hilly"] as TerrainType[])[i % 3];
+
+    // Distance: real haversine distance between this day's actual start/end
+    // towns, corrected for road detour. Falls back to the target-daily-distance
+    // heuristic only when either town has no known coordinate (e.g. a
+    // generic/placeholder stop on a route shorter than the requested duration).
+    const fromCoord = lookupCoords(waypoints[i]);
+    const toCoord = lookupCoords(waypoints[i + 1]);
+    let dist: number;
+    if (fromCoord && toCoord) {
+      const straightLineKm = haversineKm(fromCoord, toCoord);
+      dist = Math.max(5, Math.round(straightLineKm * ROAD_DETOUR_FACTOR[terrain]));
+    } else {
+      const factor = isFirst || isLast ? 0.75 : 0.85 + Math.abs(Math.sin(i * 7.3)) * 0.30;
+      dist = Math.round(dailyDist * factor);
+    }
+
     const elevPerKm = ELEV_PER_KM[terrain];
     const elev = Math.round(dist * elevPerKm);
 
